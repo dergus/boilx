@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"strings"
 	"text/template"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -18,6 +17,8 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/fatih/color"
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/samber/lo"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v2"
@@ -62,6 +63,21 @@ func main() {
 						Required: true,
 						Aliases:  []string{"t"},
 					},
+					&cli.StringFlag{
+						Name:    "private",
+						Usage:   "is private repository",
+						Aliases: []string{"p"},
+					},
+					&cli.StringFlag{
+						Name:    "key_path",
+						Usage:   "path to a private key file, for private repos, by default ~/.ssh/id_rsa",
+						Aliases: []string{"k"},
+					},
+					&cli.StringFlag{
+						Name:    "key_password",
+						Usage:   "private key password if exists",
+						Aliases: []string{"w"},
+					},
 				},
 				Action: createNewApp,
 			},
@@ -96,12 +112,29 @@ func createNewApp(c *cli.Context) error {
 	}
 
 	tmpl := c.String("tmpl")
-	isRemoteTmpl := strings.HasPrefix(tmpl, "https://")
+	endpoint, err := transport.NewEndpoint(tmpl)
+	if err != nil {
+		return fmt.Errorf("unknown template endpoint: %w", err)
+	}
+
+	isRemoteTmpl := endpoint.Protocol != "file"
+
+	isPrivate := c.Bool("private")
+	keyPath := c.String("key_path")
+	keyPassword := c.String("key_password")
 
 	var tmplPath string
 	if isRemoteTmpl {
 		printInfo("downloading remote git repository with template...")
-		p, err := downloadGitRepo(c.Context, tmpl)
+
+		if isPrivate && keyPath == "" {
+			keyPath, err = getDefaultPrivateKeyPath()
+			if err != nil {
+				return fmt.Errorf("can't get default private key path: %w", err)
+			}
+		}
+
+		p, err := downloadGitRepo(c.Context, tmpl, keyPath, keyPassword)
 		if err != nil {
 			return fmt.Errorf("can't download template from remote git repo: %w", err)
 		}
@@ -400,16 +433,25 @@ func validateTemplateConfig(tc *TemplateConfig) error {
 	return nil
 }
 
-func downloadGitRepo(ctx context.Context, repoURL string) (tmplPath string, err error) {
+func downloadGitRepo(ctx context.Context, repoURL string, privateKeyPath string, privateKeyPassword string) (tmplPath string, err error) {
 	tmplDir, err := os.MkdirTemp(os.TempDir(), "boilx_template_*")
 	if err != nil {
 		return "", fmt.Errorf("can't create directory for downloading template: %w", err)
+	}
+
+	var auth transport.AuthMethod
+	if privateKeyPath != "" {
+		auth, err = ssh.NewPublicKeysFromFile("git", privateKeyPath, privateKeyPassword)
+		if err != nil {
+			return "", fmt.Errorf("can't get public keys from file: %s", err)
+		}
 	}
 
 	_, err = git.PlainCloneContext(ctx, tmplDir, false, &git.CloneOptions{
 		URL:          repoURL,
 		SingleBranch: true,
 		Depth:        1,
+		Auth:         auth,
 	})
 
 	if err != nil {
@@ -676,4 +718,13 @@ func exprValidator(pv ParamValidation) survey.Validator {
 
 		return nil
 	}
+}
+
+func getDefaultPrivateKeyPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(homeDir, ".ssh", "id_rsa"), nil
 }

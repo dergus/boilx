@@ -17,10 +17,17 @@ go install github.com/dergus/boilx@latest
 ## Usage
 ### Generate project from a template
 ```bash
-boilx create <app_name> <template>
+boilx create -n <app_name> -t <template>
 ```
-- `<app_name>` - name of the project being generated. A directory with this name will be created in the current working directory to contain project files.
-- `<template>` - url of remote git repository or path in local directory with template.
+- `-n` - name of the project being generated. A directory with this name will be created in the current working directory to contain project files.
+- `-t` - url of a remote git repository or path in local directory with template.
+
+#### Optional parameters
+- `-p` - indicates that remote repo with a template is private, default value is false
+- `-k` - path to private ssh key, by default `~/.ssh/id_rsa`
+- `-w` - private key password, if set
+
+`boilx -h` can be called for help output.
 
 ## Creating new templates
 BoilX can generate new project from any remote git repository or local folder with files.
