@@ -97,6 +97,10 @@ const boilxFileName = "boilx.yaml"
 func createNewApp(c *cli.Context) error {
 	name := c.String("name")
 
+	if !appNameRegex.MatchString(name) {
+		return fmt.Errorf("app name can consist only of alphanumeric chars and '_', '-' symbols")
+	}
+
 	wd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("can't get current working directory: %w", err)
