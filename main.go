@@ -24,20 +24,25 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var redBold = color.New(color.FgRed, color.Bold).SprintFunc()
-var yellow = color.New(color.FgYellow).SprintFunc()
-var greenBold = color.New(color.FgGreen, color.Bold).SprintFunc()
+var redBold = color.New(color.FgHiRed).SprintFunc()
+var yellow = color.New(color.FgHiYellow).SprintFunc()
+var greenBold = color.New(color.FgHiGreen).SprintFunc()
+var whiteBold = color.New(color.FgHiWhite).SprintFunc()
 
 func printErr(err error) {
-	fmt.Println(redBold(err.Error()))
+	fmt.Println(redBold("🛑 " + err.Error()))
 }
 
 func printInfo(msg string) {
-	fmt.Println(greenBold(msg))
+	fmt.Println(whiteBold("ℹ️ " + msg))
+}
+
+func printSuccess(msg string) {
+	fmt.Println(greenBold("✔ ️" + msg))
 }
 
 func printWarn(msg string) {
-	fmt.Println(yellow(msg))
+	fmt.Println(yellow("⚠ ️" + msg))
 }
 
 func main() {
@@ -150,7 +155,7 @@ func createNewApp(c *cli.Context) error {
 		}()
 
 		tmplPath = p
-		printInfo("successfully downloaded remote git repository with template")
+		printSuccess("successfully downloaded remote git repository with template")
 	} else {
 		tmplPath = tmpl
 	}
@@ -221,7 +226,7 @@ func createNewApp(c *cli.Context) error {
 		return fmt.Errorf("error processing template: %w", err)
 	}
 
-	printInfo("successfully created app from template!")
+	printSuccess("successfully created app from template!")
 
 	return nil
 }
