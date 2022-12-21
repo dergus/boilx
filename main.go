@@ -24,25 +24,25 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var redBold = color.New(color.FgHiRed).SprintFunc()
-var yellow = color.New(color.FgHiYellow).SprintFunc()
-var greenBold = color.New(color.FgHiGreen).SprintFunc()
-var whiteBold = color.New(color.FgHiWhite).SprintFunc()
+var fmtErr = color.New(color.FgHiRed).SprintFunc()
+var fmtWarn = color.New(color.FgHiYellow).SprintFunc()
+var fmtSuccess = color.New(color.FgHiGreen).SprintFunc()
+var fmtInfo = color.New(color.FgHiWhite).SprintFunc()
 
 func printErr(err error) {
-	fmt.Println(redBold("🛑 " + err.Error()))
-}
-
-func printInfo(msg string) {
-	fmt.Println(whiteBold("ℹ️ " + msg))
-}
-
-func printSuccess(msg string) {
-	fmt.Println(greenBold("✔ ️" + msg))
+	fmt.Println(fmtErr("🛑 " + err.Error()))
 }
 
 func printWarn(msg string) {
-	fmt.Println(yellow("⚠ ️" + msg))
+	fmt.Println(fmtWarn("⚠ ️" + msg))
+}
+
+func printSuccess(msg string) {
+	fmt.Println(fmtSuccess("✔ ️" + msg))
+}
+
+func printInfo(msg string) {
+	fmt.Println(fmtInfo("ℹ️ " + msg))
 }
 
 func main() {
