@@ -19,7 +19,7 @@ go install github.com/dergus/boilx@latest
 ```bash
 boilx create -n <app_name> -t <template>
 ```
-- `-n` - name of the project being generated. A directory with this name will be created in the current working directory to contain project files.
+- `-n` - name of the project being generated. A directory with this name will be created in the current working directory to contain project files. Parameter with name `appName` will be set with this value.
 - `-t` - url of a remote git repository or path in local directory with template.
 
 #### Optional parameters
@@ -88,3 +88,6 @@ The generated file name will be stripped out of `.tmpl` extension (e.g. `config.
 ### Expression language
 All expressions in `BoilX` file are evaluated using https://github.com/antonmedv/expr.
 Expression language definition can be found at https://github.com/antonmedv/expr/blob/master/docs/Language-Definition.md.
+
+### Path templates
+All path names are rendered using Go Templates and have access to user-provided param values. For example if path has a name `cmd/{{.appName}}` and value of the `appName` params is `github`, then the generated path name will be `cmd/github`.

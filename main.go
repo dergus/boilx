@@ -199,7 +199,7 @@ func createNewApp(c *cli.Context) error {
 		answers[q.Name] = decodeAnswer(resp[q.Name])
 	}
 
-	answers["app_name"] = name
+	answers["appName"] = name
 
 	dstPath := filepath.Join(wd, name)
 
@@ -509,6 +509,17 @@ func processTemplate(sourcePath, destPath string, params ParamValues, excludedPa
 			}
 
 			return nil
+		}
+
+		pathTmpl, err := template.New("").Parse(relPath)
+
+		if err == nil {
+			var buf bytes.Buffer
+			if err := pathTmpl.Execute(&buf, params); err != nil {
+				return fmt.Errorf("can't render path template: path: %s, err %w", relPath, err)
+			}
+
+			relPath = buf.String()
 		}
 
 		absPath := filepath.Join(tempDir, relPath)
