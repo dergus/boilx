@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"text/template"
+	"time"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/antonmedv/expr"
@@ -20,6 +21,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/samber/lo"
+	"github.com/tj/go-spin"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v2"
 )
@@ -43,6 +45,39 @@ func printSuccess(msg string) {
 
 func printInfo(msg string) {
 	fmt.Println(fmtInfo("ℹ️ " + msg))
+}
+
+func printSpinner(msg string) (cancel func()) {
+	// using channel for cancellation instead of context.WithCancel
+	// as spinner should be cleaned up after finished
+	// but context's cancel func doesn't wait for cancelling to be finished
+	cancelChan := make(chan struct{})
+	msg = fmtInfo(msg)
+	go func() {
+		s := spin.New()
+		for {
+			select {
+			case <-cancelChan:
+				fmt.Print("\r")
+				return
+			default:
+				fmt.Printf("\r%s %s ", msg, s.Next())
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}()
+
+	return func() {
+		select {
+		case _, ok := <-cancelChan:
+			if !ok {
+				return
+			}
+		default:
+			cancelChan <- struct{}{}
+			close(cancelChan)
+		}
+	}
 }
 
 func main() {
@@ -134,7 +169,8 @@ func createNewApp(c *cli.Context) error {
 
 	var tmplPath string
 	if isRemoteTmpl {
-		printInfo("downloading remote git repository with template...")
+		cancelSpinner := printSpinner("🚀 downloading remote git repository with the template")
+		defer cancelSpinner()
 
 		if isPrivate && keyPath == "" {
 			keyPath, err = getDefaultPrivateKeyPath()
@@ -154,6 +190,7 @@ func createNewApp(c *cli.Context) error {
 			}
 		}()
 
+		cancelSpinner()
 		tmplPath = p
 		printSuccess("successfully downloaded remote git repository with template")
 	} else {
