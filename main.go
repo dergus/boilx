@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Masterminds/sprig/v3"
+	"gopkg.in/yaml.v2"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -23,7 +25,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/tj/go-spin"
 	"github.com/urfave/cli/v2"
-	"gopkg.in/yaml.v2"
 )
 
 var fmtErr = color.New(color.FgHiRed).SprintFunc()
@@ -522,7 +523,8 @@ func processTemplate(sourcePath, destPath string, params ParamValues, excludedPa
 			return
 		}
 
-		if err = os.RemoveAll(tempDir); err != nil {
+		removeErr := os.RemoveAll(tempDir)
+		if removeErr != nil {
 			printWarn(fmt.Sprintf("couldn't remove temporary directory with template files at %s", tempDir))
 		}
 	}()
@@ -553,7 +555,7 @@ func processTemplate(sourcePath, destPath string, params ParamValues, excludedPa
 			return nil
 		}
 
-		pathTmpl, err := template.New("").Parse(relPath)
+		pathTmpl, err := template.New("").Funcs(sprig.FuncMap()).Parse(relPath)
 
 		if err == nil {
 			var buf bytes.Buffer
@@ -589,13 +591,16 @@ func processTemplate(sourcePath, destPath string, params ParamValues, excludedPa
 
 		if filepath.Ext(relPath) == templateFileExt {
 			absPath = absPath[:len(absPath)-len(templateFileExt)]
-			tmpl, err := template.ParseFiles(path)
+
+			name := filepath.Base(path)
+			tmpl, err := template.New(name).Funcs(sprig.FuncMap()).ParseFiles(path)
 			if err != nil {
 				return fmt.Errorf("can't parse template '%s': %w", relPath, err)
 			}
 
 			var buf bytes.Buffer
-			if err := tmpl.Execute(&buf, params); err != nil {
+
+			if err := tmpl.Funcs(sprig.FuncMap()).Execute(&buf, params); err != nil {
 				return fmt.Errorf("can't exec template '%s': %w", relPath, err)
 			}
 
