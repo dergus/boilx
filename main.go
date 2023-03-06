@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Masterminds/sprig/v3"
-	"gopkg.in/yaml.v2"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -14,6 +12,10 @@ import (
 	"strconv"
 	"text/template"
 	"time"
+
+	"github.com/AlecAivazis/survey/v2/core"
+	"github.com/Masterminds/sprig/v3"
+	"gopkg.in/yaml.v2"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/antonmedv/expr"
@@ -271,6 +273,8 @@ func createNewApp(c *cli.Context) error {
 
 func decodeAnswer(answer any) any {
 	switch vv := answer.(type) {
+	case core.OptionAnswer:
+		return vv.Value
 	case []survey.OptionAnswer:
 		ovs := make([]string, 0, len(vv))
 		for _, o := range vv {
