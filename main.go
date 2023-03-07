@@ -15,6 +15,7 @@ import (
 
 	"github.com/AlecAivazis/survey/v2/core"
 	"github.com/Masterminds/sprig/v3"
+	"github.com/go-git/go-git/v5/plumbing"
 	"gopkg.in/yaml.v2"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -121,6 +122,11 @@ func main() {
 						Usage:   "private key password if exists",
 						Aliases: []string{"w"},
 					},
+					&cli.StringFlag{
+						Name:    "git_branch",
+						Usage:   "git branch name (optional)",
+						Aliases: []string{"b"},
+					},
 				},
 				Action: createNewApp,
 			},
@@ -169,6 +175,7 @@ func createNewApp(c *cli.Context) error {
 	isPrivate := c.Bool("private")
 	keyPath := c.String("key_path")
 	keyPassword := c.String("key_password")
+	gitBranchName := c.String("git_branch")
 
 	var tmplPath string
 	if isRemoteTmpl {
@@ -182,7 +189,7 @@ func createNewApp(c *cli.Context) error {
 			}
 		}
 
-		p, err := downloadGitRepo(c.Context, tmpl, keyPath, keyPassword)
+		p, err := downloadGitRepo(c.Context, tmpl, keyPath, keyPassword, gitBranchName)
 		if err != nil {
 			return fmt.Errorf("can't download template from remote git repo: %w", err)
 		}
@@ -484,7 +491,13 @@ func validateTemplateConfig(tc *TemplateConfig) error {
 	return nil
 }
 
-func downloadGitRepo(ctx context.Context, repoURL string, privateKeyPath string, privateKeyPassword string) (tmplPath string, err error) {
+func downloadGitRepo(
+	ctx context.Context,
+	repoURL string,
+	privateKeyPath string,
+	privateKeyPassword string,
+	branchName string,
+) (tmplPath string, err error) {
 	tmplDir, err := os.MkdirTemp(os.TempDir(), "boilx_template_*")
 	if err != nil {
 		return "", fmt.Errorf("can't create directory for downloading template: %w", err)
@@ -498,11 +511,17 @@ func downloadGitRepo(ctx context.Context, repoURL string, privateKeyPath string,
 		}
 	}
 
+	var refName plumbing.ReferenceName
+	if branchName != "" {
+		refName = plumbing.NewBranchReferenceName(branchName)
+	}
+	
 	_, err = git.PlainCloneContext(ctx, tmplDir, false, &git.CloneOptions{
-		URL:          repoURL,
-		SingleBranch: true,
-		Depth:        1,
-		Auth:         auth,
+		URL:           repoURL,
+		SingleBranch:  true,
+		ReferenceName: refName,
+		Depth:         1,
+		Auth:          auth,
 	})
 
 	if err != nil {
