@@ -19,6 +19,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/Masterminds/semver/v3"
 	"github.com/antonmedv/expr"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/fatih/color"
@@ -29,6 +30,9 @@ import (
 	"github.com/tj/go-spin"
 	"github.com/urfave/cli/v2"
 )
+
+var currentVersion = semver.New(1, 0, 1, "", "")
+var defaultTemplateVersion = semver.New(1, 0, 0, "", "")
 
 var fmtErr = color.New(color.FgHiRed).SprintFunc()
 var fmtWarn = color.New(color.FgHiYellow).SprintFunc()
@@ -370,6 +374,7 @@ type PathRule struct {
 }
 
 type TemplateConfig struct {
+	Version     *string      `yaml:"version"`
 	SourcePath  *string      `yaml:"source_path"`
 	Description string       `yaml:"description"`
 	Params      ConfigParams `yaml:"params"`
@@ -428,6 +433,26 @@ func validateTemplateConfig(tc *TemplateConfig) error {
 		if err := validatePath(*tc.SourcePath); err != nil {
 			return err
 		}
+	}
+
+	tv := defaultTemplateVersion
+	if tc.Version != nil {
+		var err error
+		tv, err = semver.StrictNewVersion(*tc.Version)
+
+		if err != nil {
+			return fmt.Errorf("invalid version string '%s', should be SemVer", *tc.Version)
+		}
+	} else {
+		printWarn(fmt.Sprintf("template schema version is not specified, assuming default version (%s)", defaultTemplateVersion))
+	}
+
+	if currentVersion.Major() != tv.Major() {
+		return fmt.Errorf("BoilX's major version (%d) and the template's major version (%d) do not match", currentVersion.Major(), tv.Major())
+	}
+
+	if tv.Minor() > currentVersion.Minor() {
+		printWarn(fmt.Sprintf("template's minor version (%d) is greater than BoilX's minor version (%d). Not all functionality might be supported.", tv.Minor(), currentVersion.Minor()))
 	}
 
 	for k, p := range tc.Params {
@@ -515,7 +540,7 @@ func downloadGitRepo(
 	if branchName != "" {
 		refName = plumbing.NewBranchReferenceName(branchName)
 	}
-	
+
 	_, err = git.PlainCloneContext(ctx, tmplDir, false, &git.CloneOptions{
 		URL:           repoURL,
 		SingleBranch:  true,
