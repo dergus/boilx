@@ -624,7 +624,10 @@ func processTemplate(sourcePath, destPath string, params ParamValues, excludedPa
 		mode := info.Mode()
 
 		if d.IsDir() {
-			os.Mkdir(absPath, os.ModeDir)
+			if err := os.Mkdir(absPath, os.ModeDir); err != nil {
+				return fmt.Errorf("can't create directory '%s': %w", absPath, err)
+			}
+
 			if err := os.Chmod(absPath, mode); err != nil {
 				return fmt.Errorf("can't change mode of '%s': %w", absPath, err)
 			}
