@@ -34,7 +34,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var currentVersion = semver.New(1, 0, 1, "", "")
+var currentVersion = semver.New(1, 3, 1, "", "")
 var defaultTemplateVersion = semver.New(1, 0, 0, "", "")
 
 var fmtErr = color.New(color.FgHiRed).SprintFunc()
