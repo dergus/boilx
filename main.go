@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
@@ -26,6 +28,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	"github.com/liamg/tml"
 	"github.com/samber/lo"
 	"github.com/tj/go-spin"
 	"github.com/urfave/cli/v2"
@@ -273,7 +276,7 @@ func createNewApp(c *cli.Context) error {
 		srcPath = filepath.Join(tmplPath, *tmplConf.SourcePath)
 	}
 
-	if err = processTemplate(srcPath, dstPath, answers, xps); err != nil {
+	if err = processTemplate(srcPath, dstPath, answers, xps, tmplConf.Commands); err != nil {
 		return fmt.Errorf("error processing template: %w", err)
 	}
 
@@ -373,12 +376,23 @@ type PathRule struct {
 	Rule  string   `yaml:"rule"`
 }
 
+type Commands struct {
+	PreInit  []CommandConf `yaml:"pre_init"`
+	PostInit []CommandConf `yaml:"post_init"`
+}
+
+type CommandConf struct {
+	Name string `json:"name"`
+	Cmd  string `json:"cmd"`
+}
+
 type TemplateConfig struct {
 	Version     *string      `yaml:"version"`
 	SourcePath  *string      `yaml:"source_path"`
 	Description string       `yaml:"description"`
 	Params      ConfigParams `yaml:"params"`
 	PathRules   []PathRule   `yaml:"path_rules"`
+	Commands    Commands     `yaml:"commands"`
 	paramOrder  []string
 }
 
@@ -513,6 +527,26 @@ func validateTemplateConfig(tc *TemplateConfig) error {
 		}
 	}
 
+	for _, c := range tc.Commands.PreInit {
+		if len(c.Name) == 0 {
+			return fmt.Errorf("empty name for '%s'", c.Cmd)
+		}
+
+		if len(c.Cmd) == 0 {
+			return fmt.Errorf("empty cmd for '%s'", c.Name)
+		}
+	}
+
+	for _, c := range tc.Commands.PostInit {
+		if len(c.Name) == 0 {
+			return fmt.Errorf("empty name for '%s'", c.Cmd)
+		}
+
+		if len(c.Cmd) == 0 {
+			return fmt.Errorf("empty cmd for '%s'", c.Name)
+		}
+	}
+
 	return nil
 }
 
@@ -560,7 +594,13 @@ type ParamValues map[string]any
 
 const templateFileExt = ".tmpl"
 
-func processTemplate(sourcePath, destPath string, params ParamValues, excludedPaths mapset.Set[string]) (err error) {
+func processTemplate(
+	sourcePath string,
+	destPath string,
+	params ParamValues,
+	excludedPaths mapset.Set[string],
+	commands Commands,
+) (err error) {
 	tempDir, err := os.MkdirTemp(os.TempDir(), "boilx_app_*")
 	if err != nil {
 		return fmt.Errorf("can't create temporary directory for app: %w", err)
@@ -579,6 +619,10 @@ func processTemplate(sourcePath, destPath string, params ParamValues, excludedPa
 
 	if err := os.Chmod(tempDir, 0777); err != nil {
 		return fmt.Errorf("can't change temp dir mode: %w", err)
+	}
+
+	if err := runCommands(commands.PreInit, tempDir, params); err != nil {
+		return err
 	}
 
 	err = filepath.WalkDir(sourcePath, func(path string, d fs.DirEntry, err error) error {
@@ -670,6 +714,10 @@ func processTemplate(sourcePath, destPath string, params ParamValues, excludedPa
 	})
 
 	if err != nil {
+		return err
+	}
+
+	if err := runCommands(commands.PostInit, tempDir, params); err != nil {
 		return err
 	}
 
@@ -802,11 +850,11 @@ func kindValidator(kind Kind) survey.Validator {
 				_, err := castKindValue(kind, a.Value)
 				return err
 			}
-		case string:
+		case survey.OptionAnswer, string:
 			_, err := castKindValue(kind, ansVal)
 			return err
 		default:
-			fmt.Errorf("answer can't be parsed")
+			return fmt.Errorf("answer can't be parsed")
 		}
 
 		return nil
@@ -840,4 +888,44 @@ func getDefaultPrivateKeyPath() (string, error) {
 	}
 
 	return filepath.Join(homeDir, ".ssh", "id_rsa"), nil
+}
+
+func runCommands(cmds []CommandConf, workDir string, params ParamValues) error {
+	for _, c := range cmds {
+		printInfo(tml.Sprintf("executing command <bold><cyan>%s</cyan></bold>", c.Name))
+		output, err := runCommand(c.Cmd, workDir, params)
+		if err != nil {
+			return errors.New(tml.Sprintf("<bold><cyan>%s</cyan></bold>: %s", c.Name, err))
+		}
+
+		if output != "" {
+			printInfo(tml.Sprintf("<bold><cyan>%s</cyan></bold>: %s", c.Name, output))
+		}
+	}
+
+	return nil
+}
+
+func runCommand(cmdStr string, workDir string, params ParamValues) (string, error) {
+	cmdTempl, err := template.New("").Funcs(sprig.TxtFuncMap()).Parse(cmdStr)
+	if err != nil {
+		return "", fmt.Errorf("can't parse command template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := cmdTempl.Execute(&buf, params); err != nil {
+		return "", fmt.Errorf("can't execute command template: %w", err)
+	}
+
+	// Split command string into command and arguments
+	parts := strings.Fields(buf.String())
+	head := parts[0]
+	parts = parts[1:]
+
+	cmd := exec.Command(head, parts...)
+	cmd.Dir = workDir
+
+	output, err := cmd.CombinedOutput()
+
+	return string(output), err
 }
