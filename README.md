@@ -39,6 +39,7 @@ Boilx file consists of following sections:
 
 Below is an example of a complete `boilx` file with comments:
 ```yaml
+version: 1.0.0 # BoilX's schema version (follows SemVer), BoilX will check its version with the template's version and err out if major versions are different
 source_path: "." # path to a directory with template files, relative to boilx file, default is template root directory
 params: # a list of parameters that can be used for rendering template files or deciding which files to generate. User will be interactively presented with this params to provide values.
   databases: # name of parameter
