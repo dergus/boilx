@@ -33,9 +33,11 @@ boilx create -n <app_name> -t <template>
 BoilX can generate new project from any remote git repository or local folder with files.
 But in order to use it's full-power a `boilx.yml` should exist at template root.
 Boilx file consists of following sections:
+- `version` - schema version in SemVer format. BoilX will check this version with its own version and err out if major versions do not match.
 - `source_path` - path to a directory with template files, relative to `boilx` file, default is template root directory
 - `params` - a list of parameters that can be used for rendering template files or deciding which files to generate. User will be interactively presented with this params to provide values.
 - `path_rules` - contains rules for conditional file generation. If a path is in one of rules it will be generated only if the latest rule it is in is true.
+- `commands` - custom shell commands to run on different stages of project initialization. Commands rendered using golang template engine and have access to all `params` values.
 
 Below is an example of a complete `boilx` file with comments:
 ```yaml
@@ -78,6 +80,15 @@ path_rules: # this section contains rules for paths to be generated. If path is 
   - rule: "'postgres' in databases"
     paths:
       - pkg/postgres
+commands: # any custom commands to run before or after initializing the project.
+  pre_init:
+    - name: "hello"
+      cmd: "echo hello" # can be any shell command
+    - name: "say my name"
+      cmd: "echo app name is {{.appName}}" # also supports golang template rendering with all param values available.
+  post_init:
+    - name: "bye"
+      cmd: "echo bye"
 ```
 
 All sections of the `boilx` file, as the `boilx` file itself are optional. 
