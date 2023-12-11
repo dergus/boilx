@@ -34,7 +34,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var currentVersion = semver.New(1, 3, 1, "", "")
+var currentVersion = semver.New(1, 3, 2, "", "")
 var defaultTemplateVersion = semver.New(1, 0, 0, "", "")
 
 var fmtErr = color.New(color.FgHiRed).SprintFunc()
@@ -850,11 +850,9 @@ func kindValidator(kind Kind) survey.Validator {
 				_, err := castKindValue(kind, a.Value)
 				return err
 			}
-		case survey.OptionAnswer, string:
+		default:
 			_, err := castKindValue(kind, ansVal)
 			return err
-		default:
-			return fmt.Errorf("answer can't be parsed")
 		}
 
 		return nil
