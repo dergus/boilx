@@ -86,7 +86,7 @@ commands: # any custom commands to run before or after initializing the project.
     - name: "hello"
       cmd: "echo hello" # can be any shell command
     - name: "say my name"
-      rule: ".appName == 'heisenberg'" # run cmd only when this rule executes to true. All params and env variables (inside the _ENV map) ara available in the rule.
+      rule: "appName == 'heisenberg'" # run cmd only when this rule executes to true. All params and env variables (inside the _ENV map) ara available in the rule.
       cmd: "echo app name is {{.appName}}" # also supports golang template rendering with all param values available.
   post_init:
     - name: "bye"
