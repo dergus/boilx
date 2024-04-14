@@ -15,6 +15,13 @@ BoilX let's you interactively generate project boilerplate from remote templates
 go install github.com/dergus/boilx@latest
 ```
 
+### Copy binaries to the local bin
+```bash
+sudo cp ~/go/bin/boilx /usr/local/bin/boilx
+
+sudo chmod +x /usr/local/bin/boilx
+```
+
 ## Usage
 ### Generate project from a template
 ```bash
