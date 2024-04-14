@@ -34,7 +34,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var currentVersion = semver.New(1, 3, 2, "", "")
+var currentVersion = semver.New(1, 4, 0, "", "")
 var defaultTemplateVersion = semver.New(1, 0, 0, "", "")
 
 var fmtErr = color.New(color.FgHiRed).SprintFunc()
@@ -229,17 +229,12 @@ func createNewApp(c *cli.Context) error {
 	answers := make(ParamValues)
 	for _, q := range qs {
 		if q.HideRule != nil {
-			res, err := expr.Eval(*q.HideRule, answers)
+			res, err := evalRule(*q.HideRule, answers)
 			if err != nil {
 				return fmt.Errorf("hide rule for param '%s' returned an error: %w", q.Name, err)
 			}
 
-			resBool, ok := res.(bool)
-			if !ok {
-				return fmt.Errorf("hide rule for param '%s' didn't return a bool value", q.Name)
-			}
-
-			if resBool {
+			if res {
 				continue
 			}
 		}
@@ -382,8 +377,9 @@ type Commands struct {
 }
 
 type CommandConf struct {
-	Name string `json:"name"`
-	Cmd  string `json:"cmd"`
+	Name string  `json:"name"`
+	Cmd  string  `json:"cmd"`
+	Rule *string `yaml:"rule"`
 }
 
 type TemplateConfig struct {
@@ -818,21 +814,30 @@ func promptForParam(p ConfigParam) survey.Prompt {
 	}
 }
 
+func evalRule(rule string, params map[string]any) (bool, error) {
+	res, err := expr.Eval(rule, lo.Assign(params, map[string]any{"_ENV": envMap()}))
+	if err != nil {
+		return false, fmt.Errorf("can't execute rule '%s': %w", rule, err)
+	}
+
+	resBool, ok := res.(bool)
+	if !ok {
+		return false, fmt.Errorf("return value of the rule '%s' should be bool", rule)
+	}
+
+	return resBool, nil
+}
+
 func getExcludedPaths(pathRules []PathRule, params ParamValues) (mapset.Set[string], error) {
 	excludedPaths := mapset.NewSet([]string{}...)
 
 	for _, pr := range pathRules {
-		res, err := expr.Eval(pr.Rule, params)
+		res, err := evalRule(pr.Rule, params)
 		if err != nil {
-			return nil, fmt.Errorf("can't execute rule '%s': %w", pr.Rule, err)
+			return nil, err
 		}
 
-		resBool, ok := res.(bool)
-		if !ok {
-			return nil, fmt.Errorf("return value of the rule '%s' should be bool", pr.Rule)
-		}
-
-		if resBool {
+		if res {
 			excludedPaths = excludedPaths.Difference(mapset.NewSet(pr.Paths...))
 		} else {
 			excludedPaths = excludedPaths.Union(mapset.NewSet(pr.Paths...))
@@ -861,17 +866,12 @@ func kindValidator(kind Kind) survey.Validator {
 
 func exprValidator(pv ParamValidation) survey.Validator {
 	return func(ans any) error {
-		res, err := expr.Eval(pv.Rule, map[string]any{"$v": ans})
+		res, err := evalRule(pv.Rule, map[string]any{"$v": ans})
 		if err != nil {
 			return fmt.Errorf("can't validate: internal error: %w", err)
 		}
 
-		resBool, ok := res.(bool)
-		if !ok {
-			return fmt.Errorf("expression should return bool value: internal error")
-		}
-
-		if !resBool {
+		if !res {
 			return errors.New(pv.Description)
 		}
 
@@ -888,12 +888,43 @@ func getDefaultPrivateKeyPath() (string, error) {
 	return filepath.Join(homeDir, ".ssh", "id_rsa"), nil
 }
 
+func envMap() map[string]string {
+	em := make(map[string]string)
+
+	// Get all environment variables
+	envVars := os.Environ()
+
+	// Iterate over each environment variable
+	for _, env := range envVars {
+		// Split the environment variable into key-value pairs
+		pair := strings.SplitN(env, "=", 2)
+		if len(pair) == 2 {
+			key := pair[0]
+			value := pair[1]
+			em[key] = value
+		}
+	}
+
+	return em
+}
+
 func runCommands(cmds []CommandConf, workDir string, params ParamValues) error {
 	for _, c := range cmds {
+		if c.Rule != nil {
+			res, err := evalRule(*c.Rule, params)
+			if err != nil {
+				return fmt.Errorf("failed evauluating command rule '%s': %w", c.Name, err)
+			}
+
+			if !res {
+				continue
+			}
+		}
+
 		printInfo(tml.Sprintf("executing command <bold><cyan>%s</cyan></bold>", c.Name))
 		output, err := runCommand(c.Cmd, workDir, params)
 		if err != nil {
-			return errors.New(tml.Sprintf("<bold><cyan>%s</cyan></bold>: %s", c.Name, err))
+			return errors.New(tml.Sprintf("<bold><cyan>%s</cyan></bold>: %s\nOutput: %s", c.Name, err, output))
 		}
 
 		if output != "" {
@@ -915,12 +946,7 @@ func runCommand(cmdStr string, workDir string, params ParamValues) (string, erro
 		return "", fmt.Errorf("can't execute command template: %w", err)
 	}
 
-	// Split command string into command and arguments
-	parts := strings.Fields(buf.String())
-	head := parts[0]
-	parts = parts[1:]
-
-	cmd := exec.Command(head, parts...)
+	cmd := exec.Command("sh", "-c", buf.String())
 	cmd.Dir = workDir
 
 	output, err := cmd.CombinedOutput()
